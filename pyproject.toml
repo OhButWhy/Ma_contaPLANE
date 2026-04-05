@@ -1,0 +1,29 @@
+[project]
+name = "ma-contaplane"
+version = "0.1.0"
+description = "Airplane detection on HRPlanes using PyTorch"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "torch",
+    "torchvision",
+    "numpy",
+    "pillow",
+    "matplotlib",
+    "tqdm",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pre-commit",
+    "ruff",
+]
+
+[tool.uv]
+package = false
+
+[tool.ruff]
+line-length = 88
+
+[tool.ruff.lint]
+select = ["E", "F", "I"]
