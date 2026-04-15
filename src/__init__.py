@@ -17,7 +17,7 @@ from .data_utils import (
     load_yolo_labels,
     read_split,
 )
-from .model import ManualBackbone, create_model
+from .model import MBackbone, create_model
 
 __all__ = [
     "TrainConfig",
@@ -28,7 +28,7 @@ __all__ = [
     "detection_prf1",
     "load_yolo_labels",
     "read_split",
-    "ManualBackbone",
+    "MBackbone",
     "create_model",
     "draw_predictions",
     "save_history",
