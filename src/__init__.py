@@ -12,6 +12,7 @@ from .config import TrainConfig, get_default_config
 from .data_utils import (
     YoloDetectionDataset,
     create_dataloader,
+    detection_map,
     detection_prf1,
     load_yolo_labels,
     read_split,
@@ -23,6 +24,7 @@ __all__ = [
     "get_default_config",
     "YoloDetectionDataset",
     "create_dataloader",
+    "detection_map",
     "detection_prf1",
     "load_yolo_labels",
     "read_split",

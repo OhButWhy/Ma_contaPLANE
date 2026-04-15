@@ -1,6 +1,7 @@
 from pathlib import Path
 from typing import Dict, List, Sequence, Tuple
 
+import numpy as np
 import torch
 from PIL import Image
 from torch.utils.data import DataLoader, Dataset
@@ -220,3 +221,99 @@ def detection_prf1(
         "fp": float(fp),
         "fn": float(fn),
     }
+
+
+def _average_precision_from_precision_recall(
+    precision: np.ndarray,
+    recall: np.ndarray,
+) -> float:
+    if precision.size == 0 or recall.size == 0:
+        return 0.0
+
+    recall_thresholds = np.linspace(0.0, 1.0, 101)
+    interpolated_precision = []
+    for threshold in recall_thresholds:
+        eligible = precision[recall >= threshold]
+        interpolated_precision.append(
+            float(eligible.max()) if eligible.size else 0.0
+        )
+
+    return float(np.mean(interpolated_precision))
+
+
+def detection_map(
+    predictions: List[Dict[str, torch.Tensor]],
+    targets: List[Dict[str, torch.Tensor]],
+    iou_thresholds: Sequence[float] | None = None,
+) -> Dict[str, float]:
+    """Compute COCO-style mAP metrics for the single-class detection setup."""
+    if iou_thresholds is None:
+        iou_thresholds = tuple(float(x) / 100.0 for x in range(50, 100, 5))
+
+    flattened_predictions: List[Tuple[int, float, torch.Tensor]] = []
+    gt_by_image: List[torch.Tensor] = []
+
+    for image_index, (pred, target) in enumerate(zip(predictions, targets)):
+        pred_boxes = pred.get("boxes", torch.zeros((0, 4))).detach().cpu()
+        pred_scores = pred.get("scores", torch.zeros((0,))).detach().cpu()
+        pred_labels = pred.get(
+            "labels",
+            torch.ones((pred_boxes.shape[0],), dtype=torch.int64),
+        ).detach().cpu()
+        keep = pred_labels > 0
+        if pred_boxes.numel() > 0:
+            pred_boxes = pred_boxes[keep]
+            pred_scores = pred_scores[keep]
+
+        for box, score in zip(pred_boxes, pred_scores):
+            flattened_predictions.append((image_index, float(score), box))
+
+        gt_by_image.append(target["boxes"].detach().cpu())
+
+    total_gt = int(sum(boxes.shape[0] for boxes in gt_by_image))
+    if total_gt == 0:
+        return {"map50": 0.0, "map50_95": 0.0}
+
+    flattened_predictions.sort(key=lambda item: item[1], reverse=True)
+
+    ap_values: List[float] = []
+    for iou_threshold in iou_thresholds:
+        tp_flags: List[int] = []
+        fp_flags: List[int] = []
+        matched_gt = [set() for _ in gt_by_image]
+
+        for image_index, _, pred_box in flattened_predictions:
+            gt_boxes = gt_by_image[image_index]
+            if gt_boxes.numel() == 0:
+                tp_flags.append(0)
+                fp_flags.append(1)
+                continue
+
+            ious = box_iou(pred_box.unsqueeze(0), gt_boxes).squeeze(0)
+            best_iou, best_index = torch.max(ious, dim=0)
+            best_iou_value = float(best_iou)
+            best_gt_index = int(best_index)
+
+            if (
+                best_iou_value >= iou_threshold
+                and best_gt_index not in matched_gt[image_index]
+            ):
+                matched_gt[image_index].add(best_gt_index)
+                tp_flags.append(1)
+                fp_flags.append(0)
+            else:
+                tp_flags.append(0)
+                fp_flags.append(1)
+
+        tp_cum = np.cumsum(tp_flags, dtype=np.float64)
+        fp_cum = np.cumsum(fp_flags, dtype=np.float64)
+
+        recall = tp_cum / total_gt
+        precision = tp_cum / np.maximum(tp_cum + fp_cum, 1.0)
+        ap_values.append(
+            _average_precision_from_precision_recall(precision, recall)
+        )
+
+    map50 = float(ap_values[0]) if ap_values else 0.0
+    map50_95 = float(np.mean(ap_values)) if ap_values else 0.0
+    return {"map50": map50, "map50_95": map50_95}
