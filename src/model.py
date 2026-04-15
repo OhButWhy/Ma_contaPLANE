@@ -4,7 +4,7 @@ from torchvision.models.detection.anchor_utils import AnchorGenerator
 from torchvision.ops import MultiScaleRoIAlign
 
 
-class ManualBackbone(nn.Module):
+class MBackbone(nn.Module):
     """Ручной CNN-backbone для извлечения признаков из аэрофото.
 
     Архитектура:
@@ -40,7 +40,7 @@ class ManualBackbone(nn.Module):
             nn.ReLU(inplace=True),
         )
 
-        # FasterRCNN ожидает это поле у backbone.
+        # для FasterRCNN
         self.out_channels = 256
 
     def forward(self, x):
@@ -52,17 +52,9 @@ class ManualBackbone(nn.Module):
 
 
 def create_model(num_classes: int = 2, pretrained: bool = True):
-    """Create a manually assembled Faster R-CNN detector.
-
-    Blocks:
-    1) MobileNetV3-Small feature extractor
-    2) Custom anchor generator (RPN)
-    3) ROI Align pooler
-    4) Faster R-CNN detection head
-    """
     # Параметр pretrained оставлен для совместимости сигнатуры.
     _ = pretrained
-    backbone = ManualBackbone()
+    backbone = MBackbone()
 
     anchor_generator = AnchorGenerator(
         sizes=((32, 64, 128, 256, 512),),
